@@ -6,7 +6,6 @@ import https from "https";
 import fetch from "node-fetch";
 import path from "path";
 import pc from "picocolors";
-import Vite from "vite";
 
 const { NODE_ENV } = process.env;
 
@@ -14,7 +13,7 @@ const Config = {
   mode: (NODE_ENV === "production" ? "production" : "development") as
     | "production"
     | "development",
-  assetRoot: undefined as string | undefined,
+  assetDir: undefined as string | undefined,
   vitePort: 5173,
   viteServerSecure: false,
   printViteDevServerHost: false,
@@ -43,8 +42,8 @@ function isStaticFilePath(path: string) {
 async function serveStatic(app: core.Express) {
   info(`Running in ${pc.yellow(Config.mode)} mode`);
   if (Config.mode === "production") {
-    const config = await Vite.resolveConfig({}, "build");
-    const distPath = path.resolve(config.root, config.build.outDir);
+    const assetDir = Config.assetDir || process.cwd();
+    const distPath = path.resolve(assetDir);
     app.use(express.static(distPath));
 
     if (!fs.existsSync(distPath)) {
@@ -73,8 +72,10 @@ async function serveStatic(app: core.Express) {
 }
 
 async function startDevServer() {
+  const Vite = await import("vite");
+  const rootDir = Config.assetDir ? path.dirname(Config.assetDir) : undefined;
   const server = await Vite.createServer({
-    root: Config.assetRoot,
+    root: rootDir,
     clearScreen: false,
     server: { port: Config.vitePort },
   }).then((server) => server.listen());
@@ -92,9 +93,8 @@ async function startDevServer() {
 
 async function serveHTML(app: core.Express) {
   if (Config.mode === "production") {
-    const config = await Vite.resolveConfig({}, "build");
-    const root = Config.assetRoot || config.root;
-    const distPath = path.resolve(root, config.build.outDir);
+    const assetDir = Config.assetDir || process.cwd();
+    const distPath = path.resolve(assetDir);
 
     app.use("*", (_, res) => {
       res.sendFile(path.resolve(distPath, "index.html"));
@@ -123,7 +123,7 @@ function config(config: ConfigurationOptions) {
   if (config.vitePort) Config.vitePort = config.vitePort;
   if (config.printViteDevServerHost)
     Config.printViteDevServerHost = config.printViteDevServerHost;
-  if (config.assetRoot) Config.assetRoot = config.assetRoot;
+  if (config.assetDir) Config.assetDir = config.assetDir;
 }
 
 async function bind(
@@ -148,6 +148,7 @@ function listen(app: core.Express, port: number, callback?: () => void) {
 
 async function build() {
   info("Build starting...");
+  const Vite = await import("vite");
   await Vite.build();
   info("Build completed!");
 }
